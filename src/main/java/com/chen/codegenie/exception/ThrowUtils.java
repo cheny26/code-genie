@@ -1,8 +1,6 @@
 package com.chen.codegenie.exception;
 
 
-import com.chen.codegenie.common.ErrorCode;
-
 /**
  * 抛异常工具类
  *

@@ -1,5 +1,6 @@
 package com.chen.codegenie.common;
 
+import com.chen.codegenie.exception.ErrorCode;
 import lombok.Data;
 
 import java.io.Serializable;

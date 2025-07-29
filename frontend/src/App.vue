@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import BasicLayout from '@/layouts/BasicLayout.vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN';
+import { useRoute } from 'vue-router'
+import { computed } from 'vue'
 import { healthCheck } from './api/healthController';
+
+const route = useRoute()
+
+// 检查当前路由是否需要隐藏布局
+const hideLayout = computed(() => route.meta?.hideLayout)
+
 healthCheck().then(res => {
   console.log(res)
 })
@@ -9,7 +17,8 @@ healthCheck().then(res => {
 
 <template>
     <a-config-provider :locale="zhCN">
-      <BasicLayout />
+      <BasicLayout v-if="!hideLayout" />
+      <RouterView v-else />
     </a-config-provider>
 </template>
 

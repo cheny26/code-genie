@@ -1,8 +1,14 @@
 spring:
   application:
    name: code-genie
+  datasource:
+   url: jdbc:mysql://localhost:3306/code-genie
+   username: root
+   password: mysql80
 server:
   port: 8080
+
+
 # springdoc-openapi
 springdoc:
   group-configs:

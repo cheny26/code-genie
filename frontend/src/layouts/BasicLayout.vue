@@ -4,14 +4,14 @@
     <a-layout-header class="header">
       <GlobalHeader />
     </a-layout-header>
-    
+
     <!-- 中间内容区域 -->
     <a-layout-content class="content">
       <div class="content-wrapper">
         <RouterView />
       </div>
     </a-layout-content>
-    
+
     <!-- 底部版权信息 -->
     <a-layout-footer class="footer">
       <GlobalFooter />
@@ -50,10 +50,7 @@ import GlobalFooter from '@/components/GlobalFooter.vue'
 
 .content-wrapper {
   margin: 0 auto;
-  background: #fff;
-  padding: 24px;
-  /* border-radius: 8px; */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  /* padding: 24px; */
   min-height: calc(100vh - 200px);
 }
 

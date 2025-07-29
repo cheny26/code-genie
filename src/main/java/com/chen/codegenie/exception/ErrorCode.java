@@ -1,7 +1,6 @@
-package com.chen.codegenie.common;
+package com.chen.codegenie.exception;
 
 import lombok.Getter;
-import lombok.Setter;
 
 /**
  * 自定义错误码

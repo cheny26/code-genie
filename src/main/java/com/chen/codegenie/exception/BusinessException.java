@@ -1,6 +1,5 @@
 package com.chen.codegenie.exception;
 
-import com.chen.codegenie.common.ErrorCode;
 import lombok.Getter;
 
 /**

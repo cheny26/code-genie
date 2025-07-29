@@ -1,6 +1,8 @@
 package com.chen.codegenie.common;
 
 
+import com.chen.codegenie.exception.ErrorCode;
+
 /**
  * @author chen
  */

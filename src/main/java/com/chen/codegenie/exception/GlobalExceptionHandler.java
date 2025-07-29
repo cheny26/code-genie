@@ -2,7 +2,6 @@ package com.chen.codegenie.exception;
 
 
 import com.chen.codegenie.common.BaseResponse;
-import com.chen.codegenie.common.ErrorCode;
 import com.chen.codegenie.common.ResultUtils;
 import io.swagger.v3.oas.annotations.Hidden;
 import lombok.extern.slf4j.Slf4j;
