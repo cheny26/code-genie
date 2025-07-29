@@ -1,0 +1,58 @@
+package com.chen.codegenie.model.vo;
+
+import lombok.Data;
+
+import java.io.Serial;
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+/**
+ * 脱敏后的用户信息
+ * @author chen
+ */
+@Data
+public class UserVO implements Serializable {
+
+    /**
+     * id
+     */
+    private Long id;
+
+    /**
+     * 用户名
+     */
+    private String userName;
+
+    /**
+     * 用户头像
+     */
+    private String userAvatar;
+
+    /**
+     * 用户简介
+     */
+    private String userProfile;
+
+    /**
+     * 积分
+     */
+    private Integer points;
+
+    /**
+     * 邮箱
+     */
+    private String email;
+
+    /**
+     * 用户角色：user/admin
+     */
+    private String userRole;
+
+    /**
+     * 创建时间
+     */
+    private LocalDateTime createTime;
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+}
