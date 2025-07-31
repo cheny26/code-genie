@@ -183,4 +183,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
         final String SALT = "chen";
         return DigestUtils.md5DigestAsHex((userPassword + SALT).getBytes(StandardCharsets.UTF_8));
     }
+
+    @Override
+    public boolean isAdmin(HttpServletRequest request) {
+        // 仅管理员可查询
+        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
+        User user = (User) userObj;
+        return isAdmin(user);
+    }
+
+    @Override
+    public boolean isAdmin(User user) {
+        return user != null && "admin".equals(user.getUserRole());
+    }
 }
