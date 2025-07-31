@@ -44,7 +44,7 @@ public class CodeGenerator {
 
         //设置表前缀和只生成哪些表
         //globalConfig.setTablePrefix("tb_");
-        //globalConfig.setGenerateTable("tb_account", "tb_account_session");
+        globalConfig.setGenerateTable("app");
         globalConfig.setLogicDeleteColumn("is_delete");
         //设置生成 entity 并启用 Lombok
         globalConfig.setEntityGenerateEnable(true);

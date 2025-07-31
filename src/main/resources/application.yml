@@ -5,9 +5,21 @@ spring:
    url: jdbc:mysql://localhost:3306/code-genie
    username: root
    password: mysql80
+  profiles:
+   active: local
+
 server:
   port: 8080
 
+# AI
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: https://api.deepseek.com
+      api-key: <Your API Key>
+      model-name: deepseek-chat
+      log-requests: true
+      log-responses: true
 
 # springdoc-openapi
 springdoc:
