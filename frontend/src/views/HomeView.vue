@@ -4,21 +4,36 @@
     <div class="hero-section">
       <div class="hero-content">
         <h1 class="hero-title">
-          一句话 <span class="brand-highlight">🤖</span> 呈所想
+          代码精灵，让代码生成更简单
         </h1>
-        <p class="hero-subtitle">与 AI 对话轻松创建应用和网站</p>
+        <p class="hero-subtitle">副标题</p>
 
         <!-- 用户提示词输入框 -->
         <div class="prompt-input-section">
-          <a-input-search
-            v-model:value="userPrompt"
-            placeholder="使用 NoCode 创建一个高效的小工具，帮我计算......"
-            size="large"
-            enter-button="创建应用"
-            :loading="creating"
-            @search="createApp"
-            class="prompt-input"
-          />
+          <div class="input-wrapper">
+            <a-textarea
+              v-model:value="userPrompt"
+              placeholder="使用 NoCode 创建一个高效的小工具，游戏玩法是......"
+              size="large"
+              class="main-input"
+              @keyup.enter="createApp"
+              :auto-size="{ minRows: 1, maxRows: 10 }"
+            />
+
+            <div>
+              <a-button
+                type="primary"
+                size="large"
+                shape="circle"
+                :loading="creating"
+                @click="createApp"
+                :disabled="!userPrompt.trim() "
+              >
+              <ArrowUpOutlined />
+              </a-button>
+            </div>
+          </div>
+
           <div class="quick-prompts">
             <a-button
               v-for="prompt in quickPrompts"
@@ -51,31 +66,19 @@
       </div>
 
       <div class="app-grid">
-        <div
+        <AppCard
           v-for="app in myApps"
           :key="app.id"
-          class="app-card"
-          @click="goToChat(app.id!)"
-        >
-          <div class="app-cover">
-            <img v-if="app.cover" :src="app.cover" :alt="app.appName" />
-            <div v-else class="default-cover">
-              <CodeOutlined />
-            </div>
-          </div>
-          <div class="app-info">
-            <h3 class="app-name">{{ app.appName }}</h3>
-            <p class="app-creator">创建于 {{ formatDate(app.createTime) }}</p>
-            <div class="app-actions">
-              <a-button size="small" type="text" @click.stop="editApp(app.id!)">
-                编辑
-              </a-button>
-              <a-button size="small" type="text" danger @click.stop="deleteMyApp(app.id!)">
-                删除
-              </a-button>
-            </div>
-          </div>
-        </div>
+          :app="app"
+          :show-actions="true"
+          :current-user-avatar="userStore.userAvatar"
+          :current-user-name="userStore.userName"
+          @click="goToChat"
+          @edit="editApp"
+          @delete="deleteMyApp"
+          @view-chat="goToViewChat"
+          @view-work="goToViewWork"
+        />
 
         <!-- 空状态 -->
         <div v-if="myApps.length === 0 && !myAppLoading" class="empty-state">
@@ -113,27 +116,14 @@
       </div>
 
       <div class="app-grid">
-        <div
+        <AppCard
           v-for="app in featuredApps"
           :key="app.id"
-          class="app-card featured"
-          @click="goToChat(app.id!)"
-        >
-          <div class="app-cover">
-            <img v-if="app.cover" :src="app.cover" :alt="app.appName" />
-            <div v-else class="default-cover">
-              <CodeOutlined />
-            </div>
-            <div class="featured-badge">精选</div>
-          </div>
-          <div class="app-info">
-            <h3 class="app-name">{{ app.appName }}</h3>
-            <p class="app-creator">{{ app.user?.userName || 'NoCode 官方' }}</p>
-            <div class="app-meta">
-              <a-tag color="blue">{{ app.codeGenType || '工具' }}</a-tag>
-            </div>
-          </div>
-        </div>
+          :app="app"
+          @click="goToChat"
+          @view-chat="goToViewChat"
+          @view-work="goToViewWork"
+        />
 
         <!-- 空状态 -->
         <div v-if="featuredApps.length === 0 && !featuredLoading" class="empty-state">
@@ -161,10 +151,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { CodeOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/userStore'
 import { addApp, listMyAppVoByPage, listFeaturedAppVoByPage, deleteApp } from '@/api/appController'
-import type { AppVO } from '@/api/typings'
+import AppCard from '@/components/AppCard.vue'
+// 使用全局类型声明
+type AppVO = API.AppVO
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -298,6 +290,16 @@ const goToChat = (appId: number) => {
   router.push(`/app/chat/${appId}`)
 }
 
+// 查看对话（带view参数）
+const goToViewChat = (appId: number) => {
+  router.push(`/app/chat/${appId}?view=1`)
+}
+
+// 查看作品
+const goToViewWork = (deployKey: string) => {
+  window.open(`http://localhost/${deployKey}`, '_blank')
+}
+
 // 编辑应用
 const editApp = (appId: number) => {
   router.push(`/app/edit/${appId}`)
@@ -319,11 +321,7 @@ const deleteMyApp = async (appId: number) => {
   }
 }
 
-// 格式化日期
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString()
-}
+
 
 // 页面加载
 onMounted(() => {
@@ -336,17 +334,29 @@ onMounted(() => {
 
 <style scoped>
 .home-container {
-  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 24px 24px;
+  background-color: #f7f8fc;
 }
 
 .hero-section {
   text-align: center;
-  padding: 80px 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  margin: -24px -24px 40px -24px;
-  color: white;
+  padding: 120px 0 80px 0;
+  color: rgb(7, 7, 7);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .hero-title {
@@ -356,9 +366,7 @@ onMounted(() => {
   line-height: 1.2;
 }
 
-.brand-highlight {
-  color: #ffd700;
-}
+
 
 .hero-subtitle {
   font-size: 20px;
@@ -366,27 +374,38 @@ onMounted(() => {
   opacity: 0.9;
 }
 
+.hero-content {
+  position: relative;
+  z-index: 1;
+}
+
 .prompt-input-section {
-  max-width: 600px;
+  max-width: 800px;
   margin: 0 auto;
 }
 
-.prompt-input {
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   margin-bottom: 16px;
+  padding: 8px;
+  gap: 8px;
 }
 
-.prompt-input :deep(.ant-input) {
-  border-radius: 8px;
+
+
+.main-input {
+  flex: 1;
+  border: none;
+  box-shadow: none ;
   padding: 12px 16px;
   font-size: 16px;
 }
 
-.prompt-input :deep(.ant-btn) {
-  border-radius: 8px;
-  height: auto;
-  padding: 12px 24px;
-  font-size: 16px;
-}
 
 .quick-prompts {
   display: flex;
@@ -396,21 +415,15 @@ onMounted(() => {
 }
 
 .quick-prompt-btn {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgb(225, 221, 221);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  border-radius: 16px;
-  padding: 4px 12px;
-  font-size: 12px;
-}
-
-.quick-prompt-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  color: white;
+  color: rgb(63, 62, 62);
+  border-radius: 20px;
 }
 
 .section {
-  margin-bottom: 60px;
+  padding: 0 24px;
+  margin-bottom: 10px;
 }
 
 .section-header {
@@ -429,83 +442,8 @@ onMounted(() => {
 .app-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  gap: 30px;
   margin-bottom: 24px;
-}
-
-.app-card {
-  background: white;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.app-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.app-card.featured {
-  border: 2px solid #1890ff;
-}
-
-.app-cover {
-  position: relative;
-  height: 160px;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.default-cover {
-  font-size: 48px;
-  color: #bfbfbf;
-}
-
-.featured-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: #1890ff;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.app-info {
-  padding: 16px;
-}
-
-.app-name {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-  color: #262626;
-}
-
-.app-creator {
-  font-size: 14px;
-  color: #8c8c8c;
-  margin: 0 0 12px 0;
-}
-
-.app-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.app-meta {
-  margin-top: 8px;
 }
 
 .empty-state {

@@ -237,7 +237,7 @@ const goToRegister = () => {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: white;
+  background: #F7F8FC;
 }
 
 .login-card {

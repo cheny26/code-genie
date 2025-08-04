@@ -1,5 +1,5 @@
 <template>
-  <div class="global-header">
+  <div class="global-header" :class="{ 'scrolled': isScrolled }">
     <div class="header-left">
       <!-- Logo 和网站标题 -->
       <div class="logo-section">
@@ -20,19 +20,16 @@
     <div class="header-right">
       <!-- 未登录状态 -->
       <div v-if="!userStore.isLoggedIn" class="auth-buttons">
-        <a-button @click="goToLogin">登录</a-button>
-        <a-button type="primary" @click="goToRegister">注册</a-button>
+        <a-button type="primary" @click="goToLogin">登录</a-button>
+        <a-button  @click="goToRegister">注册</a-button>
       </div>
 
       <!-- 已登录状态 -->
       <div v-else class="user-info">
         <a-dropdown>
-          <a-button type="text" class="user-button">
-            <a-avatar :src="userStore.userAvatar" :size="32">
+          <a-avatar :src="userStore.userAvatar" :size="32">
               {{ userStore.userName?.charAt(0)?.toUpperCase() }}
             </a-avatar>
-            <span class="username">{{ userStore.userName }}</span>
-          </a-button>
           <template #overlay>
             <a-menu @click="handleUserMenuClick">
               <a-menu-item key="profile">
@@ -56,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {  UserOutlined, SettingOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/userStore'
@@ -65,6 +62,36 @@ import type { MenuProps } from 'ant-design-vue'
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+
+// 滚动状态
+const isScrolled = ref(false)
+
+// 节流函数
+const throttle = <T extends (...args: unknown[]) => void>(func: T, delay: number) => {
+  let timeoutId: number | null = null
+  let lastExecTime = 0
+  return function (this: unknown, ...args: Parameters<T>) {
+    const currentTime = Date.now()
+
+    if (currentTime - lastExecTime > delay) {
+      func.apply(this, args)
+      lastExecTime = currentTime
+    } else {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      timeoutId = setTimeout(() => {
+        func.apply(this, args)
+        lastExecTime = Date.now()
+      }, delay - (currentTime - lastExecTime))
+    }
+  }
+}
+
+// 滚动监听函数
+const handleScroll = throttle(() => {
+  isScrolled.value = window.scrollY > 10
+}, 16) // 约60fps
 
 // 从路由配置中获取菜单配置
 const menuConfig = computed(() => {
@@ -146,6 +173,16 @@ onMounted(() => {
   if (userStore.isLoggedIn) {
     userStore.fetchCurrentUser()
   }
+
+  // 添加滚动监听
+  window.addEventListener('scroll', handleScroll)
+  // 初始检查滚动位置
+  handleScroll()
+})
+
+// 组件卸载时移除滚动监听
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
 })
 
 // 监听路由变化，更新选中的菜单项
@@ -161,7 +198,22 @@ router.afterEach((to) => {
   align-items: center;
   height: 64px;
   padding: 0 24px;
-  background: #fff;
+  background: #f7f8fc;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-bottom: 1px solid transparent;
+}
+
+.global-header.scrolled {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(20px);
+  /* border-bottom: 1px solid rgba(0, 0, 0, 0.1); */
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
 }
 
 .header-left {
@@ -187,12 +239,55 @@ router.afterEach((to) => {
   font-weight: 600;
   color: #1890ff;
   white-space: nowrap;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 滚动时Logo和标题的样式调整 */
+.global-header.scrolled .logo {
+  opacity: 0.9;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.global-header.scrolled .site-title {
+  color: #1890ff;
+  text-shadow: 0 1px 2px rgba(24, 144, 255, 0.1);
 }
 
 .nav-menu {
   flex: 1;
   border-bottom: none;
   line-height: 64px;
+  font-weight: 500;
+  background: transparent;
+}
+
+/* 滚动时菜单样式 */
+.global-header.scrolled .nav-menu {
+  background: transparent;
+}
+
+/* 菜单项样式优化 */
+.nav-menu :deep(.ant-menu-item) {
+  margin: 0 4px;
+  border-bottom: none !important;
+}
+
+.nav-menu :deep(.ant-menu-item:hover) {
+  color: #1890ff !important;
+  /* border-bottom: none !important; */
+}
+
+.nav-menu :deep(.ant-menu-item-selected) {
+  border-bottom: none !important;
+}
+
+.nav-menu :deep(.ant-menu-item::after) {
+  color: #1890ff;
+  display: none !important;
+}
+
+.nav-menu :deep(.ant-menu-item-selected::after) {
+  display: none !important;
 }
 
 .header-right {
@@ -203,6 +298,25 @@ router.afterEach((to) => {
 .auth-buttons {
   display: flex;
   gap: 12px;
+}
+
+/* 滚动时按钮样式调整 */
+.global-header.scrolled .auth-buttons .ant-btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.global-header.scrolled .auth-buttons .ant-btn:not(.ant-btn-primary) {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(24, 144, 255, 0.3);
+  color: #1890ff;
+}
+
+.global-header.scrolled .auth-buttons .ant-btn-primary {
+  background: rgba(24, 144, 255, 0.9);
+  border-color: rgba(24, 144, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
 }
 
 .user-info {
@@ -217,10 +331,30 @@ router.afterEach((to) => {
   height: auto;
   padding: 8px 12px;
   border-radius: 6px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .username {
   font-weight: 500;
   color: #333;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 滚动时用户信息样式调整 */
+.global-header.scrolled .user-button {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(24, 144, 255, 0.2);
+}
+
+.global-header.scrolled .user-button:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(24, 144, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.15);
+}
+
+.global-header.scrolled .username {
+  color: rgba(0, 0, 0, 0.85);
 }
 </style>
