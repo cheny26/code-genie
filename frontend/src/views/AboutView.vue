@@ -50,7 +50,7 @@
   padding: 24px;
   max-width: 80%;
   margin: 0 auto;
-  min-height: calc(100vh - 200px);
+  /* background: #f7f8fc; */
 }
 
 .about-content {

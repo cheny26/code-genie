@@ -75,7 +75,7 @@
 
         <!-- 应用类型 -->
         <a-form-item label="应用类型">
-          <a-input :value="app.codeGenType" disabled />
+          <a-input :value="getCodeGenTypeLabel(app.codeGenType || '')" disabled />
         </a-form-item>
 
         <!-- 优先级（仅管理员可见） -->
@@ -188,6 +188,7 @@ import {
 } from '@ant-design/icons-vue'
 import { getAppVoById, updateApp, updateAppByAdmin } from '@/api/appController'
 import type { AppVO, AppUpdateRequest, AppAdminUpdateRequest } from '@/api/typings'
+import { getCodeGenTypeLabel } from '@/constants/codeGenType'
 
 const route = useRoute()
 const router = useRouter()
@@ -216,7 +217,7 @@ const rules = {
 }
 
 // 计算属性
-const appId = computed(() => Number(route.params.id))
+const appId = computed(() => route.params.id)
 const isAdmin = computed(() => userStore.userInfo?.userRole === 'admin')
 const isOwner = computed(() => app.value?.userId === userStore.userInfo?.id)
 const canEdit = computed(() => isAdmin.value || isOwner.value)

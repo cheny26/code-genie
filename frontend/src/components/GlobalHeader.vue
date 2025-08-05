@@ -314,7 +314,7 @@ router.afterEach((to) => {
 }
 
 .global-header.scrolled .auth-buttons .ant-btn-primary {
-  background: rgba(24, 144, 255, 0.9);
+  /* background: rgba(24, 144, 255, 0.9); */
   border-color: rgba(24, 144, 255, 0.9);
   box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
 }

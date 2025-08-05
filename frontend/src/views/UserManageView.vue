@@ -2,56 +2,58 @@
   <div class="user-manage-container">
     <!-- 搜索和操作区域 -->
     <div class="search-section">
-      <a-card>
-        <a-row :gutter="16" align="middle">
-          <a-col :span="6">
-            <a-input
-              v-model:value="searchForm.userName"
-              placeholder="搜索用户名"
-              allow-clear
-              @press-enter="handleSearch"
-            >
-              <template #prefix>
-                <UserOutlined />
-              </template>
-            </a-input>
-          </a-col>
-          <a-col :span="6">
-            <a-select
-              v-model:value="searchForm.userRole"
-              placeholder="选择用户角色"
-              allow-clear
-              style="width: 100%"
-            >
-              <a-select-option value="user">普通用户</a-select-option>
-              <a-select-option value="admin">管理员</a-select-option>
-            </a-select>
-          </a-col>
-          <a-col :span="6">
-            <a-space>
-              <a-button type="primary" @click="handleSearch" :loading="loading">
-                <template #icon><SearchOutlined /></template>
-                搜索
-              </a-button>
-              <a-button @click="handleReset">
-                <template #icon><ReloadOutlined /></template>
-                重置
-              </a-button>
-            </a-space>
-          </a-col>
-          <a-col :span="6" style="text-align: right">
-            <a-button type="primary" @click="showAddModal">
-              <template #icon><PlusOutlined /></template>
-              添加用户
-            </a-button>
-          </a-col>
-        </a-row>
+      <a-card style="background: transparent">
+        <a-form layout="inline">
+          <a-row :gutter="16" style="width: 100%">
+            <a-col :span="6">
+              <a-form-item label="用户名">
+                <a-input
+                  v-model:value="searchForm.userName"
+                  placeholder="请输入用户名"
+                  allow-clear
+                  @press-enter="handleSearch"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="6">
+              <a-form-item label="用户角色">
+                <a-select
+                  v-model:value="searchForm.userRole"
+                  placeholder="请选择用户角色"
+                  allow-clear
+                  style="width: 100%"
+                >
+                  <a-select-option value="user">普通用户</a-select-option>
+                  <a-select-option value="admin">管理员</a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item>
+                <a-space>
+                  <a-button type="primary" @click="handleSearch">
+                    <template #icon><SearchOutlined /></template>
+                    搜索
+                  </a-button>
+                  <a-button @click="handleReset">
+                    <template #icon><ReloadOutlined /></template>
+                    重置
+                  </a-button>
+                  <a-button type="primary" @click="showAddModal">
+                    <template #icon><PlusOutlined /></template>
+                    添加用户
+                  </a-button>
+                </a-space>
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </a-form>
       </a-card>
     </div>
 
     <!-- 用户列表 -->
     <div class="table-section">
-      <a-card>
+      <a-card >
         <a-table
           :columns="columns"
           :data-source="userList"
@@ -148,11 +150,11 @@ import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   UserOutlined,
-  SearchOutlined,
-  ReloadOutlined,
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  SearchOutlined,
+  ReloadOutlined
 } from '@ant-design/icons-vue'
 import {
   listUserVoByPage,
@@ -160,6 +162,8 @@ import {
   updateUser,
   deleteUser
 } from '@/api/userController'
+
+
 
 // 响应式数据
 const loading = ref(false)
@@ -174,6 +178,8 @@ const searchForm = reactive({
   userName: '',
   userRole: undefined as string | undefined
 })
+
+
 
 // 用户表单
 const userForm = reactive({
@@ -274,7 +280,7 @@ const fetchUserList = async () => {
     const response = await listUserVoByPage(params)
     if (response.data.code === 0 && response.data.data) {
       userList.value = response.data.data.records || []
-      pagination.total = response.data.data.totalRow || 0
+      pagination.total = Number(response.data.data.totalRow) || 0
     } else {
       message.error(response.data.message || '获取用户列表失败')
     }
@@ -416,9 +422,11 @@ onMounted(() => {
 
 <style scoped>
 .user-manage-container {
+  /* background-color: blue; */
   /* padding: 24px;
   background-color: #8f2121; */
-  min-height: calc(100vh - 200px);
+  /* min-height: ; */
+  margin: 0 auto;
 }
 
 
@@ -440,37 +448,7 @@ onMounted(() => {
 }
 
 .table-section {
-  background: white;
   border-radius: 8px;
 }
 
-:deep(.ant-table-thead > tr > th) {
-  background-color: #fafafa;
-  font-weight: 600;
-}
-
-:deep(.ant-table-tbody > tr:hover > td) {
-  background-color: #f5f5f5;
-}
-
-:deep(.ant-card) {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-:deep(.ant-btn) {
-  border-radius: 6px;
-}
-
-:deep(.ant-input) {
-  border-radius: 6px;
-}
-
-:deep(.ant-select .ant-select-selector) {
-  border-radius: 6px;
-}
-
-:deep(.ant-modal .ant-modal-content) {
-  border-radius: 8px;
-}
 </style>

@@ -7,6 +7,7 @@
           <ArrowLeftOutlined />
         </a-button>
         <h1 class="app-title">{{ appInfo?.appName || '应用对话' }}</h1>
+        <a-button shape="circle" :icon="h(EditOutlined)" style="border:none" @click="openEditModal"/>
       </div>
       <div class="header-right">
         <a-button
@@ -34,7 +35,7 @@
       <!-- 左侧对话区域 -->
       <div class="chat-panel" :style="{ width: leftPanelWidth + 'px' }">
         <!-- 消息区域 -->
-        <div class="messages-container" ref="messagesContainer">
+        <div class="messages-container" ref="messagesContainer" @scroll="checkIfUserAtBottom">
           <div
             v-for="(message, index) in messages"
             :key="index"
@@ -51,7 +52,11 @@
             </div>
             <div class="message-content">
               <div class="message-text">
-                {{ message.content }}
+                <MarkdownRenderer
+                  v-if="message.role === 'assistant'"
+                  :content="message.content"
+                />
+                <span v-else>{{ message.content }}</span>
               </div>
               <div class="message-time">{{ formatTime(message.timestamp) }}</div>
             </div>
@@ -143,22 +148,48 @@
         </div>
         <div class="preview-content">
           <iframe
-            v-if="previewUrl"
+            v-if="previewUrl&&!isGenerating"
             :src="previewUrl"
             class="preview-iframe"
             frameborder="0"
             @load="onIframeLoad"
             @error="onIframeError"
           ></iframe>
-          <div v-else class="preview-placeholder">
-            <div class="placeholder-content">
-              <CodeOutlined style="font-size: 48px; color: #bfbfbf;" />
-              <p>网站生成完成后将在此处展示</p>
+          <!-- 生成中动画 -->
+          <div v-else class="generating-container">
+            <div class="generating-content">
+              <div class="generating-animation">
+                <div class="code-blocks">
+                  <div class="code-block" v-for="i in 6" :key="i"></div>
+                </div>
+                <div class="generating-icon">
+                  <CodeOutlined />
+                </div>
+              </div>
+              <h3>正在生成网站...</h3>
+              <p>AI正在为您创建精美的网站，请稍候</p>
+              <div class="progress-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 名称修改 -->
+    <div>
+    <a-modal v-model:open="open" title="编辑应用名称" @ok="handleOk">
+      <a-input
+        v-model:value="editingAppName"
+        placeholder="请输入应用名称"
+        :maxlength="50"
+        show-count
+      />
+    </a-modal>
+  </div>
 
     <!-- 应用详情悬浮窗 -->
     <AppDetailsModal
@@ -169,24 +200,59 @@
       @edit="editApp"
       @delete="deleteAppConfirm"
     />
+
+    <!-- 部署成功弹窗 -->
+    <a-modal
+      v-model:open="deploySuccessVisible"
+      :width="480"
+      :footer="null"
+      :centered="true"
+      class="deploy-success-modal"
+    >
+            <!-- 成功图标 -->
+        <a-result
+          status="success"
+          title="网站部署成功"
+          sub-title="你的网站已成功部署，可以通过以下链接访问："
+        >
+         <template #extra>
+          <a-input-group compact>
+            <a-input v-model:value="deploySuccessUrl" style="width: calc(100% - 100px);margin-bottom: 20px" />
+            <a-button @click="copyDeployUrl">
+              <template #icon><CopyOutlined /></template>
+            </a-button>
+          </a-input-group>
+          <a-button @click="visitWebsite" type="primary" >
+            访问网站
+          </a-button>
+          <a-button @click="closeDeploySuccess">
+            关闭
+          </a-button>
+       </template>
+     </a-result>
+    </a-modal>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { h } from 'vue';
 import { ref, onMounted, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   ArrowLeftOutlined,
   CloudUploadOutlined,
+  CopyOutlined ,
   RobotOutlined,
   SendOutlined,
   CodeOutlined,
+  EditOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/userStore'
-import { getAppVoById, deployApp as deployAppApi, deleteApp, deleteAppByAdmin } from '@/api/appController'
+import { getAppVoById, deployApp as deployAppApi, deleteApp, deleteAppByAdmin, updateApp } from '@/api/appController'
 import AppDetailsModal from '@/components/AppDetailsModal.vue'
+import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 type AppVO = API.AppVO
 
 const route = useRoute()
@@ -223,6 +289,52 @@ const leftPanelWidth = ref(400) // 默认左侧面板宽度
 const rightPanelWidth = ref(600) // 默认右侧面板宽度
 const isResizing = ref(false)
 const minPanelWidth = 300 // 最小面板宽度
+let animationFrameId: number | null = null
+let containerRect: DOMRect | null = null
+// 名称修改
+const open = ref(false)
+const editingAppName = ref('')
+
+// 部署成功弹窗
+const deploySuccessVisible = ref(false)
+const deploySuccessUrl = ref('')
+
+const handleOk = async () => {
+  if (!appInfo.value?.id || !editingAppName.value.trim()) {
+    message.warning('请输入有效的应用名称')
+    return
+  }
+
+  try {
+    const response = await updateApp({
+      id: appInfo.value.id,
+      appName: editingAppName.value.trim()
+    })
+
+    if (response.data.code === 0) {
+      // 更新本地应用信息
+      if (appInfo.value) {
+        appInfo.value.appName = editingAppName.value.trim()
+      }
+      message.success('应用名称修改成功')
+      open.value = false
+    } else {
+      message.error(response.data.message || '修改失败')
+    }
+  } catch (error) {
+    console.error('修改应用名称失败:', error)
+    message.error('修改失败，请重试')
+  }
+}
+const closeDeploySuccess = () => {
+  deploySuccessVisible.value = false
+}
+
+// 打开编辑模态框时初始化名称
+const openEditModal = () => {
+  editingAppName.value = appInfo.value?.appName || ''
+  open.value = true
+}
 
 // 应用详情相关
 const appDetailsVisible = ref(false)
@@ -287,6 +399,26 @@ const sendMessage = async () => {
   await generateResponse(content)
 }
 
+// 滚动相关状态
+const isUserAtBottom = ref(true)
+const shouldAutoScroll = ref(true)
+
+// 检查用户是否在消息底部
+const checkIfUserAtBottom = () => {
+  if (messagesContainer.value) {
+    const container = messagesContainer.value
+    const threshold = 50 // 50px的容差
+    isUserAtBottom.value = container.scrollTop + container.clientHeight >= container.scrollHeight - threshold
+  }
+}
+
+// 智能滚动到底部（只在用户在底部时才滚动）
+const smartScrollToBottom = () => {
+  if (shouldAutoScroll.value && isUserAtBottom.value && messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
 // 生成AI回复
 const generateResponse = async (userMessage: string) => {
   isGenerating.value = true
@@ -295,7 +427,7 @@ const generateResponse = async (userMessage: string) => {
 
   try {
     await nextTick()
-    scrollToBottom()
+    scrollToBottom() // 开始生成时滚动到底部
 
     // 使用SSE流式响应
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -314,24 +446,29 @@ const generateResponse = async (userMessage: string) => {
           try {
             const parsed = JSON.parse(data)
             content = parsed.d || ''
-          } catch (parseError) {
+          } catch {
             // 如果不是JSON格式，直接使用原始数据
             content = data
           }
 
-          // 如果还没有创建AI消息，则创建一个
-          if (!aiMessage) {
+          // 如果还没有创建AI消息，创建一个
+          if (!aiMessage && content) {
             aiMessage = {
               role: 'assistant',
               content: '',
               timestamp: new Date()
-            }
+            } as Message
             messages.value.push(aiMessage)
+            isGenerating.value = false // 开始接收内容后隐藏typing indicator
           }
 
           // 更新AI消息内容
-          aiMessage.content += content
-          nextTick(() => scrollToBottom())
+          if (aiMessage && content) {
+            aiMessage.content += content
+            // 强制触发响应式更新
+            messages.value = [...messages.value]
+            nextTick(() => smartScrollToBottom())
+          }
         }
       } catch (error) {
         console.error('解析SSE数据失败:', error)
@@ -344,17 +481,18 @@ const generateResponse = async (userMessage: string) => {
       isGenerating.value = false
       hasError = true
 
-      // 如果没有收到任何内容，显示错误消息
+      // 如果还没有AI消息，创建一个错误消息
       if (!aiMessage) {
         aiMessage = {
           role: 'assistant',
           content: '抱歉，生成过程中出现了错误，请重试。',
           timestamp: new Date()
-        }
+        } as Message
         messages.value.push(aiMessage)
       } else if (!aiMessage.content) {
         aiMessage.content = '抱歉，生成过程中出现了错误，请重试。'
       }
+      messages.value = [...messages.value]
     }
 
     // 监听 'done' 事件，表示代码生成完成
@@ -376,8 +514,18 @@ const generateResponse = async (userMessage: string) => {
       if (eventSource.readyState !== EventSource.CLOSED) {
         eventSource.close()
         isGenerating.value = false
-        if (!hasError && aiMessage && !aiMessage.content) {
-          aiMessage.content = '请求超时，请重试。'
+        if (!hasError) {
+          if (!aiMessage) {
+            aiMessage = {
+              role: 'assistant',
+              content: '请求超时，请重试。',
+              timestamp: new Date()
+            } as Message
+            messages.value.push(aiMessage)
+          } else if (!aiMessage.content) {
+            aiMessage.content = '请求超时，请重试。'
+          }
+          messages.value = [...messages.value]
         }
       }
     }, 300000) // 5分钟超时
@@ -387,10 +535,18 @@ const generateResponse = async (userMessage: string) => {
     message.error('生成失败，请重试')
     isGenerating.value = false
 
-    // 只有在没有创建AI消息的情况下才移除
-    if (!aiMessage && messages.value.length > 0 && messages.value[messages.value.length - 1].role === 'assistant') {
-      messages.value.pop()
+    // 如果还没有AI消息，创建一个错误消息
+    if (!aiMessage) {
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: '生成失败，请重试。',
+        timestamp: new Date()
+      }
+      messages.value.push(errorMessage)
+    } else if (aiMessage && (aiMessage as Message).content === '') {
+      (aiMessage as Message).content = '生成失败，请重试。'
     }
+    messages.value = [...messages.value]
   }
 }
 
@@ -427,35 +583,10 @@ const deployApp = async () => {
     const response = await deployAppApi({ appId: appInfo.value.id })
     if (response.data.code === 0 && response.data.data) {
       deployedUrl.value = response.data.data
+      deploySuccessUrl.value = response.data.data
 
-      // 使用弹出提示显示部署成功消息
-      message.success({
-        content: '🎉 应用部署成功！',
-        duration: 5,
-        onClick: () => {
-          // 复制部署链接到剪贴板
-          navigator.clipboard.writeText(response.data.data??'').then(() => {
-            message.info('部署链接已复制到剪贴板')
-          }).catch(() => {
-            // 如果复制失败，显示链接
-            message.info(`部署地址：${response.data.data}`)
-          })
-        }
-      })
-
-      // 额外显示一个包含链接的通知
-      message.info({
-        content: `部署地址：${response.data.data}（点击复制）`,
-        duration: 8,
-        onClick: () => {
-          navigator.clipboard.writeText(response.data.data??'').then(() => {
-            message.success('链接已复制到剪贴板')
-          }).catch(() => {
-            // 如果复制失败，在新窗口打开
-            window.open(response.data.data, '_blank')
-          })
-        }
-      })
+      // 显示美化的部署成功弹窗
+      deploySuccessVisible.value = true
     } else {
       message.error(response.data.message || '部署失败')
     }
@@ -465,6 +596,22 @@ const deployApp = async () => {
   } finally {
     deploying.value = false
   }
+}
+
+// 复制部署链接
+const copyDeployUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(deploySuccessUrl.value)
+    message.success('链接已复制到剪贴板')
+  } catch {
+    // 如果复制失败，显示链接
+    message.info(`部署地址：${deploySuccessUrl.value}`)
+  }
+}
+
+// 访问网站
+const visitWebsite = () => {
+  window.open(deploySuccessUrl.value, '_blank')
 }
 
 // 在新窗口打开预览
@@ -551,33 +698,56 @@ const deleteAppConfirm = async () => {
 // 开始拖拽调整大小
 const startResize = (e: MouseEvent | TouchEvent) => {
   isResizing.value = true
-  document.addEventListener('mousemove', handleResize)
+
+  // 缓存容器尺寸，避免重复计算
+  if (chatContent.value) {
+    containerRect = chatContent.value.getBoundingClientRect()
+  }
+
+  document.addEventListener('mousemove', handleResize, { passive: false })
   document.addEventListener('mouseup', stopResize)
-  document.addEventListener('touchmove', handleResize)
+  document.addEventListener('touchmove', handleResize, { passive: false })
   document.addEventListener('touchend', stopResize)
   e.preventDefault()
 }
 
 // 处理拖拽调整
 const handleResize = (e: MouseEvent | TouchEvent) => {
-  if (!isResizing.value || !chatContent.value) return
+  if (!isResizing.value || !containerRect) return
 
-  const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-  const containerRect = chatContent.value.getBoundingClientRect()
-  const newLeftWidth = clientX - containerRect.left
-  const containerWidth = containerRect.width
-  const newRightWidth = containerWidth - newLeftWidth - 8 // 减去分隔条宽度
-
-  // 限制最小宽度
-  if (newLeftWidth >= minPanelWidth && newRightWidth >= minPanelWidth) {
-    leftPanelWidth.value = newLeftWidth
-    rightPanelWidth.value = newRightWidth
+  // 取消之前的动画帧
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
   }
+
+  // 使用 requestAnimationFrame 优化渲染性能
+  animationFrameId = requestAnimationFrame(() => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const newLeftWidth = clientX - containerRect!.left
+    const containerWidth = containerRect!.width
+    const newRightWidth = containerWidth - newLeftWidth - 8 // 减去分隔条宽度
+
+    // 限制最小宽度
+    if (newLeftWidth >= minPanelWidth && newRightWidth >= minPanelWidth) {
+      leftPanelWidth.value = newLeftWidth
+      rightPanelWidth.value = newRightWidth
+    }
+  })
 }
 
 // 停止拖拽调整
 const stopResize = () => {
   isResizing.value = false
+
+  // 清理动画帧
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+
+  // 清理缓存的容器尺寸
+  containerRect = null
+
   document.removeEventListener('mousemove', handleResize)
   document.removeEventListener('mouseup', stopResize)
   document.removeEventListener('touchmove', handleResize)
@@ -600,6 +770,8 @@ onMounted(() => {
     initializePanelSizes()
     // 监听窗口大小变化
     window.addEventListener('resize', initializePanelSizes)
+    // 初始化滚动状态
+    checkIfUserAtBottom()
   })
 })
 </script>
@@ -645,6 +817,21 @@ onMounted(() => {
   display: flex;
   height: calc(100vh - 73px);
   position: relative;
+}
+
+/* 拖拽时的性能优化 */
+.chat-content.resizing {
+  pointer-events: none;
+}
+
+.chat-content.resizing .chat-panel,
+.chat-content.resizing .preview-panel {
+  will-change: width;
+  transform: translateZ(0); /* 启用硬件加速 */
+}
+
+.chat-content.resizing iframe {
+  pointer-events: none;
 }
 
 .chat-panel {
@@ -699,18 +886,13 @@ onMounted(() => {
 .ai-message .message-text {
   background: #ffffff;
   border: 1px solid #e8e8e8;
-  padding: 16px;
+  padding: 0;
   border-radius: 12px;
+  overflow: hidden;
 }
 
-/* 确保代码块在消息中正确显示 */
-.message-text :deep(pre) {
-  margin: 8px 0;
-  max-width: 100%;
-}
-
-.message-text :deep(code) {
-  font-size: 0.85em;
+.ai-message .message-text .markdown-renderer {
+  padding: 16px;
 }
 
 /* 用户消息中的文本保持简单样式 */
@@ -719,6 +901,11 @@ onMounted(() => {
   color: white;
   border: none;
   box-shadow: none;
+  padding: 12px 16px;
+}
+
+.user-message .message-text span {
+  color: inherit;
 }
 
 .message-time {
@@ -774,6 +961,10 @@ onMounted(() => {
   justify-content: center;
   position: relative;
   transition: background-color 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .resize-handle:hover {
@@ -839,6 +1030,138 @@ onMounted(() => {
 .placeholder-content p {
   margin: 16px 0 0 0;
   font-size: 14px;
+}
+
+/* 生成中动画样式 */
+.generating-container {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.generating-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+.generating-content {
+  text-align: center;
+  color: #595959;
+  z-index: 1;
+}
+
+.generating-animation {
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.code-blocks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+  justify-items: center;
+}
+
+.code-block {
+  width: 40px;
+  height: 6px;
+  background: #1890ff;
+  border-radius: 3px;
+  animation: codeGenerate 1.5s ease-in-out infinite;
+}
+
+.code-block:nth-child(1) { animation-delay: 0s; }
+.code-block:nth-child(2) { animation-delay: 0.2s; }
+.code-block:nth-child(3) { animation-delay: 0.4s; }
+.code-block:nth-child(4) { animation-delay: 0.6s; }
+.code-block:nth-child(5) { animation-delay: 0.8s; }
+.code-block:nth-child(6) { animation-delay: 1s; }
+
+.generating-icon {
+  font-size: 32px;
+  color: #1890ff;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.generating-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.generating-content p {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: #8c8c8c;
+}
+
+.progress-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.progress-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1890ff;
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+.progress-dots span:nth-child(1) { animation-delay: 0s; }
+.progress-dots span:nth-child(2) { animation-delay: 0.2s; }
+.progress-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* 动画关键帧 */
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+@keyframes codeGenerate {
+  0%, 100% {
+    transform: scaleX(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scaleX(1.5);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+@keyframes dotPulse {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
 }
 
 /* 响应式设计 */
@@ -911,4 +1234,5 @@ onMounted(() => {
   border-bottom: 1px solid #f0f0f0;
   padding-bottom: 8px;
 }
+
 </style>

@@ -5,44 +5,52 @@
       <p>管理系统中的所有应用</p>
     </div>
 
-    <!-- 搜索和筛选 -->
+    <!-- 搜索区域 -->
     <div class="search-section">
       <a-row :gutter="16">
-        <a-col :span="6">
-          <a-input
-            v-model:value="searchForm.appName"
-            placeholder="应用名称"
-            @change="handleSearch"
-          />
-        </a-col>
-        <a-col :span="6">
-          <a-input
-            v-model:value="searchForm.userName"
-            placeholder="创建者"
-            @change="handleSearch"
-          />
-        </a-col>
-        <a-col :span="6">
-          <a-select
-            v-model:value="searchForm.codeGenType"
-            placeholder="应用类型"
-            allow-clear
-            @change="handleSearch"
-          >
-            <a-select-option value="website">网站</a-select-option>
-            <a-select-option value="tool">工具</a-select-option>
-            <a-select-option value="game">游戏</a-select-option>
-          </a-select>
-        </a-col>
-        <a-col :span="6">
-          <a-button type="primary" @click="handleSearch">
-            <SearchOutlined />
-            搜索
-          </a-button>
-          <a-button @click="resetSearch" style="margin-left: 8px;">
-            重置
-          </a-button>
-        </a-col>
+          <a-col :span="6">
+            <a-form-item label="应用名称">
+              <a-input
+                v-model:value="searchForm.appName"
+                placeholder="请输入应用名称"
+                allow-clear
+                @press-enter="handleSearch"
+              />
+            </a-form-item>
+          </a-col>
+
+          <a-col :span="6">
+            <a-form-item label="生成类型">
+              <a-select
+                v-model:value="searchForm.codeGenType"
+                placeholder="请选择生成类型"
+                allow-clear
+                style="width: 100%"
+              >
+                <a-select-option
+                  v-for="option in CODE_GEN_TYPES"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item>
+              <a-space>
+                <a-button type="primary" @click="handleSearch">
+                  <SearchOutlined />
+                  搜索
+                </a-button>
+                <a-button @click="resetSearch">
+                  <ReloadOutlined />
+                  重置
+                </a-button>
+              </a-space>
+            </a-form-item>
+          </a-col>
       </a-row>
     </div>
 
@@ -88,6 +96,13 @@
           </div>
         </template>
 
+        <!-- 生成类型 -->
+        <template #codeGenType="{ record }">
+          <a-tag color="blue">
+            {{ getCodeGenTypeLabel(record.codeGenType) }}
+          </a-tag>
+        </template>
+
         <!-- 优先级 -->
         <template #priority="{ record }">
           <a-tag :color="getPriorityColor(record.priority)">
@@ -113,9 +128,9 @@
               <EditOutlined />
               编辑
             </a-button>
-            <a-button 
-              type="link" 
-              size="small" 
+            <a-button
+              type="link"
+              size="small"
               @click="setFeatured(record)"
               :disabled="record.priority === 99"
             >
@@ -144,16 +159,18 @@
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { 
-  SearchOutlined, 
-  EditOutlined, 
-  DeleteOutlined, 
+import {
+  EditOutlined,
+  DeleteOutlined,
   StarOutlined,
-  CodeOutlined
+  CodeOutlined,
+  SearchOutlined,
+  ReloadOutlined
 } from '@ant-design/icons-vue'
 import { listAppVoByPageAdmin, deleteAppByAdmin, updateAppByAdmin } from '@/api/appController'
-import type { AppVO } from '@/api/typings'
+import { CODE_GEN_TYPES, getCodeGenTypeLabel } from '@/constants/codeGenType'
 
+type AppVO = API.AppVO
 const router = useRouter()
 
 // 数据
@@ -163,9 +180,10 @@ const loading = ref(false)
 // 搜索表单
 const searchForm = reactive({
   appName: '',
-  userName: '',
   codeGenType: undefined as string | undefined
 })
+
+
 
 // 分页
 const pagination = reactive({
@@ -204,7 +222,8 @@ const columns = [
     title: '类型',
     dataIndex: 'codeGenType',
     key: 'codeGenType',
-    width: 100
+    width: 120,
+    slots: { customRender: 'codeGenType' }
   },
   {
     title: '优先级',
@@ -247,7 +266,7 @@ const loadApps = async () => {
       sortField: 'createTime',
       sortOrder: 'desc'
     })
-    
+
     if (response.data.code === 0 && response.data.data) {
       apps.value = response.data.data.records || []
       pagination.total = Number(response.data.data.totalRow) || 0
@@ -269,14 +288,13 @@ const handleSearch = () => {
 // 重置搜索
 const resetSearch = () => {
   searchForm.appName = ''
-  searchForm.userName = ''
   searchForm.codeGenType = undefined
   pagination.current = 1
   loadApps()
 }
 
 // 表格变化处理
-const handleTableChange = (pag: any) => {
+const handleTableChange = (pag: { current: number; pageSize: number }) => {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
   loadApps()
@@ -299,7 +317,7 @@ const setFeatured = async (app: AppVO) => {
       id: app.id,
       priority: 99
     })
-    
+
     if (response.data.code === 0) {
       message.success('设置精选成功')
       loadApps()
@@ -446,16 +464,16 @@ onMounted(() => {
   .app-manage-container {
     padding: 16px;
   }
-  
+
   .search-section {
     padding: 12px;
   }
-  
+
   .search-section .ant-row {
     flex-direction: column;
     gap: 12px;
   }
-  
+
   .search-section .ant-col {
     width: 100% !important;
   }
