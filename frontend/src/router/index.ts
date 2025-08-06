@@ -61,6 +61,51 @@ const router = createRouter({
         showInMenu: true,
       }
     },
+    {
+      path: '/app/chat/:id',
+      name: 'appChat',
+      component: () => import('@/views/AppChatView.vue'),
+      meta: {
+        title: '应用对话',
+        showInMenu: false,
+        requiresAuth: true,
+        hideLayout: true // 对话页面使用自定义布局
+      }
+    },
+    {
+      path: '/app/manage',
+      name: 'appManage',
+      component: () => import('@/views/AppManageView.vue'),
+      meta: {
+        title: '应用管理',
+        showInMenu: true,
+        requiresAuth: true,
+        requiresAdmin: true,
+        order: 20
+      }
+    },
+    {
+      path: '/chat/manage',
+      name: 'chatManage',
+      component: () => import('@/views/ChatManageView.vue'),
+      meta: {
+        title: '对话管理',
+        showInMenu: true,
+        requiresAuth: true,
+        requiresAdmin: true,
+        order: 21
+      }
+    },
+    {
+      path: '/app/edit/:id',
+      name: 'appEdit',
+      component: () => import('@/views/AppEditView.vue'),
+      meta: {
+        title: '编辑应用',
+        showInMenu: false,
+        requiresAuth: true
+      }
+    },
   ],
 })
 

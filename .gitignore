@@ -1,5 +1,5 @@
 /src/main/resources/application-local.yml
-
+tmp
 
 target/
 .mvn/wrapper/maven-wrapper.jar

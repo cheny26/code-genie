@@ -11,7 +11,7 @@ const myAxios = axios.create({
 // 全局请求拦截器
 myAxios.interceptors.request.use(
   function (config) {
-    // Do something before request is sent
+    console.log("请求为：",config)
     return config
   },
   function (error) {
