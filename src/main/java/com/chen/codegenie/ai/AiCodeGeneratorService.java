@@ -2,7 +2,9 @@ package com.chen.codegenie.ai;
 
 import com.chen.codegenie.ai.model.HtmlCodeResult;
 import com.chen.codegenie.ai.model.MultiFileCodeResult;
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 
 /**
@@ -17,7 +19,7 @@ public interface AiCodeGeneratorService {
      * @return 生成的代码结果
      */
     @SystemMessage(fromResource = "prompt/html-system-prompt.txt")
-    HtmlCodeResult generateHtmlCode(String userMessage);
+    HtmlCodeResult generateHtmlCode(@MemoryId long memoryId, @UserMessage String userMessage);
 
     /**
      * 生成多文件代码

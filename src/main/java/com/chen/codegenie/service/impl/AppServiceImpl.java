@@ -2,22 +2,36 @@ package com.chen.codegenie.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import com.chen.codegenie.constant.AppConstant;
+import com.chen.codegenie.core.AiCodeGeneratorFacade;
+import com.chen.codegenie.exception.BusinessException;
 import com.chen.codegenie.exception.ErrorCode;
 import com.chen.codegenie.exception.ThrowUtils;
 import com.chen.codegenie.model.dto.app.AppQueryRequest;
 import com.chen.codegenie.model.entity.App;
 import com.chen.codegenie.model.entity.User;
+import com.chen.codegenie.model.enums.CodeGenTypeEnum;
 import com.chen.codegenie.model.vo.AppVO;
 import com.chen.codegenie.service.AppService;
+import com.chen.codegenie.service.ChatHistoryService;
 import com.chen.codegenie.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.chen.codegenie.mapper.AppMapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +49,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private UserService userService;
+    @Resource
+    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+    //todo 优化架构，存在循环依赖问题
+    @Resource
+    @Lazy
+    private ChatHistoryService    chatHistoryService;
 
     @Override
     public void validApp(App app, boolean add) {
@@ -163,5 +183,76 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         queryWrapper.orderBy("priority", false);
         queryWrapper.orderBy("create_time", false);
         return queryWrapper;
+    }
+
+    @Override
+    public Flux<String> chatToGen(Long appId,String userPrompt, User loginUser) {
+        //参数校验
+        App app = this.getById(appId);
+        ThrowUtils.throwIf(app==null,ErrorCode.NOT_FOUND_ERROR);
+        ThrowUtils.throwIf(!app.getUserId().equals(loginUser.getId()),ErrorCode.NO_AUTH_ERROR);
+        String codeGenType = app.getCodeGenType();
+        CodeGenTypeEnum codeGenTypeEnum=CodeGenTypeEnum.getEnumByValue(codeGenType);
+        chatHistoryService.saveUserMessage(appId,loginUser.getId(),userPrompt);
+        Flux<String> ans= aiCodeGeneratorFacade.generateAndSaveCodeStream(userPrompt,codeGenTypeEnum,app.getId());
+        StringBuilder aiMessage=new StringBuilder();
+        return ans.map(chunk->{
+            aiMessage.append(chunk);
+            return chunk;
+        }).doOnComplete(()->{
+            chatHistoryService.saveAiMessage(appId,loginUser.getId(),aiMessage.toString());
+        }).doOnError(e->{
+            String errorMessage="A回复失败"+e.getMessage();
+            chatHistoryService.saveAiMessage(appId,loginUser.getId(),errorMessage);
+        });
+    }
+
+    @Override
+    public String deploy(Long appId, User loginUser) {
+        //参数验证
+        ThrowUtils.throwIf(appId==null || appId<0,ErrorCode.PARAMS_ERROR );
+        App app=this.getById(appId);
+        ThrowUtils.throwIf(app==null,ErrorCode.NOT_FOUND_ERROR);
+        ThrowUtils.throwIf(!app.getUserId().equals(loginUser.getId()),ErrorCode.NO_AUTH_ERROR);
+        String deployKey=app.getDeployKey();
+        //TODO 添加去重
+        if(StrUtil.isBlank(deployKey)){
+            deployKey= RandomUtil.randomString(6);
+        }
+        String codeGenType = app.getCodeGenType();
+        String outputFilePath= AppConstant.CODE_OUTPUT_ROOT_DIR+ File.separator+codeGenType+"_"+appId;
+        //判断应用代码是否存在
+        File sourceFile=new File(outputFilePath);
+        if(!sourceFile.exists() || !sourceFile.isDirectory()){
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"应用代码不存在");
+        }
+        //判断deployKey是否已经存在
+        String deployPath=AppConstant.CODE_DEPLOY_ROOT_DIR+File.separator+deployKey;
+        // 复制文件到部署目录
+        try {
+            FileUtil.copyContent(sourceFile, new File(deployPath), true);
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败：" + e.getMessage());
+        }
+        //更新应用的 deployKey 和部署时间
+        App updateApp = new App();
+        updateApp.setId(appId);
+        updateApp.setDeployKey(deployKey);
+        updateApp.setDeployedTime(LocalDateTime.now());
+        boolean updateResult = this.updateById(updateApp);
+        ThrowUtils.throwIf(!updateResult, ErrorCode.OPERATION_ERROR, "更新应用部署信息失败");
+        // 返回可访问的 URL
+        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+    }
+
+    @Override
+    public boolean removeAppWithCascade(Long appId) {
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
+        
+        // 先删除相关的对话历史
+        // 注意：这里需要注入 ChatHistoryService，但为了避免循环依赖，我们在 Controller 层处理级联删除
+        
+        // 删除应用本身
+        return this.removeById(appId);
     }
 }

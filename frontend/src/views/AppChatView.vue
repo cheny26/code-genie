@@ -36,9 +36,22 @@
       <div class="chat-panel" :style="{ width: leftPanelWidth + 'px' }">
         <!-- 消息区域 -->
         <div class="messages-container" ref="messagesContainer" @scroll="checkIfUserAtBottom">
+          <!-- 加载更多按钮 -->
+          <div v-if="hasMoreHistory" class="load-more-container">
+            <a-button
+              type="link"
+              :loading="loadingHistory"
+              @click="loadMoreHistory"
+              class="load-more-btn"
+            >
+              <UpOutlined />
+              加载更多历史消息
+            </a-button>
+          </div>
+
           <div
             v-for="(message, index) in messages"
-            :key="index"
+            :key="message.id || index"
             class="message-item"
             :class="{ 'user-message': message.role === 'user', 'ai-message': message.role === 'assistant' }"
           >
@@ -63,7 +76,7 @@
           </div>
 
           <!-- AI 正在输入 -->
-          <div v-if="isGenerating" class="message-item ai-message">
+          <div v-if="isWaiting" class="message-item ai-message">
             <div class="message-avatar">
               <a-avatar size="small" style="background-color: #1890ff;">
                 <RobotOutlined />
@@ -148,7 +161,7 @@
         </div>
         <div class="preview-content">
           <iframe
-            v-if="previewUrl&&!isGenerating"
+            v-if="previewUrl && !isGenerating "
             :src="previewUrl"
             class="preview-iframe"
             frameborder="0"
@@ -156,7 +169,7 @@
             @error="onIframeError"
           ></iframe>
           <!-- 生成中动画 -->
-          <div v-else class="generating-container">
+          <div v-else-if="isGenerating" class="generating-container">
             <div class="generating-content">
               <div class="generating-animation">
                 <div class="code-blocks">
@@ -194,7 +207,7 @@
     <!-- 应用详情悬浮窗 -->
     <AppDetailsModal
       :visible="appDetailsVisible"
-      :app="appInfo"
+      :app="appInfo || null"
       :show-actions="canManageApp"
       @close="appDetailsVisible = false"
       @edit="editApp"
@@ -248,12 +261,15 @@ import {
   CodeOutlined,
   EditOutlined,
   InfoCircleOutlined,
+  UpOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/userStore'
 import { getAppVoById, deployApp as deployAppApi, deleteApp, deleteAppByAdmin, updateApp } from '@/api/appController'
+import { listAppChatHistory } from '@/api/chatHistoryController'
 import AppDetailsModal from '@/components/AppDetailsModal.vue'
 import MarkdownRenderer from '@/components/MarkdownRenderer.vue'
 type AppVO = API.AppVO
+type ChatHistoryVO = API.ChatHistoryVO
 
 const route = useRoute()
 const router = useRouter()
@@ -262,11 +278,11 @@ const userStore = useUserStore()
 // 应用信息
 const appInfo = ref<AppVO>()
 const appId = computed(() => route.params.id)
-const isViewMode = computed(() => route.query.view === '1')
 const isOwner = computed(() => appInfo.value?.userId === userStore.userInfo?.id)
 
 // 消息相关
 interface Message {
+  id?: number
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
@@ -276,6 +292,13 @@ const messages = ref<Message[]>([])
 const userInput = ref('')
 const isGenerating = ref(false)
 const messagesContainer = ref<HTMLElement>()
+const isWaiting = ref(false)
+
+// 对话历史相关
+const loadingHistory = ref(false)
+const hasMoreHistory = ref(false)
+const lastCreateTime = ref<string>()
+const historyLoaded = ref(false)
 
 // 预览相关
 const previewUrl = ref('')
@@ -342,6 +365,70 @@ const canManageApp = computed(() =>
   isOwner.value || userStore.isAdmin
 )
 
+// 加载对话历史
+const loadChatHistory = async (isLoadMore = false) => {
+  if (!appId.value) return
+
+  if (isLoadMore) {
+    loadingHistory.value = true
+  }
+
+  try {
+      const response = await listAppChatHistory({
+        appId: appId.value,
+        pageSize: 10,
+        lastCreateTime: isLoadMore ? lastCreateTime.value : undefined
+      })
+
+    if (response.data.code === 0 && response.data.data) {
+      const historyRecords = response.data.data.records || []
+
+      if (historyRecords.length > 0) {
+        // 转换历史记录为消息格式
+        const historyMessages: Message[] = historyRecords.map((record: ChatHistoryVO) => ({
+          id: record.id,
+          role: record.messageType === 'user' ? 'user' : 'assistant',
+          content: record.message || '',
+          timestamp: new Date(record.createTime || '')
+        }))
+
+        // 按时间正序排序，确保老消息在前
+        historyMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+
+        if (isLoadMore) {
+          // 加载更多时，将历史消息添加到开头（因为是更老的消息）
+          messages.value = [...historyMessages, ...messages.value]
+        } else {
+          // 首次加载，直接设置消息列表
+          messages.value = historyMessages
+        }
+
+        // 更新游标和是否还有更多数据
+        // 游标应该使用最早的消息时间，用于下次加载更早的消息
+        const earliestRecord = historyMessages[0] // 排序后最早的消息
+        lastCreateTime.value = historyRecords.find(r => r.id === earliestRecord.id)?.createTime
+        hasMoreHistory.value = historyRecords.length === 10 // 如果返回了10条，可能还有更多
+      } else {
+        hasMoreHistory.value = false
+      }
+
+      historyLoaded.value = true
+    }
+  } catch (error) {
+    console.error('加载对话历史失败:', error)
+    message.error('加载对话历史失败')
+  } finally {
+    if (isLoadMore) {
+      loadingHistory.value = false
+    }
+  }
+}
+
+// 加载更多历史消息
+const loadMoreHistory = async () => {
+  await loadChatHistory(true)
+}
+
 // 加载应用信息
 const loadAppInfo = async () => {
   try {
@@ -350,9 +437,17 @@ const loadAppInfo = async () => {
     if (response.data.code === 0 && response.data.data) {
       appInfo.value = response.data.data
 
-      // 如果有初始提示词且不是查看模式，自动发送
-      if (appInfo.value.initPrompt && !isViewMode.value) {
+      // 先加载对话历史
+      await loadChatHistory()
+
+      // 如果是自己的应用且没有对话历史，才自动发送初始消息
+      if (appInfo.value.initPrompt && isOwner.value && messages.value.length === 0) {
         await sendInitialMessage(appInfo.value.initPrompt)
+      }
+
+      // 如果有至少2条对话记录，显示网站预览
+      if (messages.value.length >= 2) {
+        updatePreviewUrl()
       }
     } else {
       message.error('应用不存在')
@@ -422,6 +517,7 @@ const smartScrollToBottom = () => {
 // 生成AI回复
 const generateResponse = async (userMessage: string) => {
   isGenerating.value = true
+  isWaiting.value = true
   let aiMessage: Message | null = null
   let hasError = false
 
@@ -439,6 +535,7 @@ const generateResponse = async (userMessage: string) => {
 
     eventSource.onmessage = (event) => {
       try {
+        isWaiting.value = false
         const data = event.data
         if (data && data !== '[DONE]') {
           // 解析JSON格式的流式数据
@@ -459,7 +556,6 @@ const generateResponse = async (userMessage: string) => {
               timestamp: new Date()
             } as Message
             messages.value.push(aiMessage)
-            isGenerating.value = false // 开始接收内容后隐藏typing indicator
           }
 
           // 更新AI消息内容
@@ -502,6 +598,11 @@ const generateResponse = async (userMessage: string) => {
       isGenerating.value = false
       canDeploy.value = true
       updatePreviewUrl()
+
+      // 如果现在有至少2条对话记录，确保显示网站预览
+      if (messages.value.length >= 2) {
+        updatePreviewUrl()
+      }
     })
 
     eventSource.addEventListener('close', () => {
@@ -553,7 +654,7 @@ const generateResponse = async (userMessage: string) => {
 // 更新预览URL
 const updatePreviewUrl = () => {
   if (appInfo.value) {
-    const codeGenType = appInfo.value.codeGenType || 'website'
+    const codeGenType = appInfo.value.codeGenType
     const staticBaseUrl = import.meta.env.VITE_STATIC_BASE_URL || 'http://localhost:8080'
     const newPreviewUrl = `${staticBaseUrl}/static/${codeGenType}_${appInfo.value.id}/`
 
@@ -566,9 +667,6 @@ const updatePreviewUrl = () => {
 
     // 添加时间戳参数强制刷新iframe
     previewUrl.value = `${newPreviewUrl}?t=${Date.now()}`
-
-    // 显示预览更新消息
-    message.success('预览已更新')
   } else {
     console.error('应用信息不存在，无法更新预览URL')
   }
@@ -950,6 +1048,26 @@ onMounted(() => {
 
 .message-input {
   width: 100%;
+}
+
+.load-more-container {
+  text-align: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 16px;
+}
+
+.load-more-btn {
+  color: #1890ff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 auto;
+}
+
+.load-more-btn:hover {
+  color: #40a9ff;
 }
 
 .resize-handle {

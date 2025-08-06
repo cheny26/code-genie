@@ -2,10 +2,12 @@ package com.chen.codegenie.service;
 
 import com.chen.codegenie.model.dto.app.AppQueryRequest;
 import com.chen.codegenie.model.entity.App;
+import com.chen.codegenie.model.entity.User;
 import com.chen.codegenie.model.vo.AppVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -57,4 +59,27 @@ public interface AppService extends IService<App> {
      * @return 查询条件
      */
     QueryWrapper getFeaturedQueryWrapper(AppQueryRequest appQueryRequest);
+
+    /**
+     *
+     * @param appId 应用ID
+     * @param userPrompt 用户提示词
+     * @param loginUser  登录用户
+     */
+    Flux<String> chatToGen(Long appId, String userPrompt,User loginUser);
+
+    /**
+     * 部署应用
+     * @param appId 应用ID
+     * @param loginUser 登录用户
+     * @return 部署的链接
+     */
+    String deploy(Long appId,User loginUser);
+
+    /**
+     * 删除应用（级联删除相关数据）
+     * @param appId 应用ID
+     * @return 是否删除成功
+     */
+    boolean removeAppWithCascade(Long appId);
 }
