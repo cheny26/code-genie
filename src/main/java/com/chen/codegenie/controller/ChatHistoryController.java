@@ -1,6 +1,5 @@
 package com.chen.codegenie.controller;
 
-import cn.hutool.core.bean.BeanUtil;
 import com.chen.codegenie.annotation.AuthCheck;
 import com.chen.codegenie.common.BaseResponse;
 import com.chen.codegenie.common.DeleteRequest;
@@ -9,12 +8,10 @@ import com.chen.codegenie.constant.UserConstant;
 import com.chen.codegenie.exception.BusinessException;
 import com.chen.codegenie.exception.ErrorCode;
 import com.chen.codegenie.exception.ThrowUtils;
-import com.chen.codegenie.model.dto.chathistory.ChatHistoryAddRequest;
 import com.chen.codegenie.model.dto.chathistory.ChatHistoryQueryRequest;
 import com.chen.codegenie.model.entity.App;
 import com.chen.codegenie.model.entity.ChatHistory;
 import com.chen.codegenie.model.entity.User;
-import com.chen.codegenie.model.vo.ChatHistoryVO;
 import com.chen.codegenie.service.AppService;
 import com.chen.codegenie.service.ChatHistoryService;
 import com.chen.codegenie.service.UserService;
@@ -22,7 +19,6 @@ import com.mybatisflex.core.paginate.Page;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -76,43 +72,6 @@ public class ChatHistoryController {
     }
 
     /**
-     * 根据 id 获取对话历史（仅本人或管理员）
-     *
-     * @param id      对话历史ID
-     * @param request 请求对象
-     * @return 对话历史
-     */
-    @GetMapping("/get")
-    public BaseResponse<ChatHistory> getChatHistoryById(long id, HttpServletRequest request) {
-        ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
-        
-        ChatHistory chatHistory = chatHistoryService.getById(id);
-        ThrowUtils.throwIf(chatHistory == null, ErrorCode.NOT_FOUND_ERROR);
-        
-        User user = userService.getLoginUser(request);
-        // 仅本人或管理员可查看
-        if (!chatHistory.getUserId().equals(user.getId()) && !userService.isAdmin(request)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-        }
-        
-        return ResultUtils.success(chatHistory);
-    }
-
-    /**
-     * 根据 id 获取对话历史封装
-     *
-     * @param id      对话历史ID
-     * @param request 请求对象
-     * @return 对话历史封装
-     */
-    @GetMapping("/get/vo")
-    public BaseResponse<ChatHistoryVO> getChatHistoryVOById(long id, HttpServletRequest request) {
-        BaseResponse<ChatHistory> response = getChatHistoryById(id, request);
-        ChatHistory chatHistory = response.getData();
-        return ResultUtils.success(chatHistoryService.getChatHistoryVO(chatHistory));
-    }
-
-    /**
      * 分页获取对话历史列表（仅管理员）
      *
      * @param chatHistoryQueryRequest 查询请求
@@ -120,37 +79,15 @@ public class ChatHistoryController {
      */
     @PostMapping("/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Page<ChatHistoryVO>> listChatHistoryVOByPage(@RequestBody ChatHistoryQueryRequest chatHistoryQueryRequest) {
+    public BaseResponse<Page<ChatHistory>> listChatHistoryVOByPage(@RequestBody ChatHistoryQueryRequest chatHistoryQueryRequest) {
         long pageNum = chatHistoryQueryRequest.getPageNum();
         long pageSize = chatHistoryQueryRequest.getPageSize();
         
         Page<ChatHistory> chatHistoryPage = chatHistoryService.page(Page.of(pageNum, pageSize),
                 chatHistoryService.getQueryWrapper(chatHistoryQueryRequest));
-        return ResultUtils.success(chatHistoryService.getChatHistoryVOPage(chatHistoryPage));
+        return ResultUtils.success(chatHistoryPage);
     }
 
-    /**
-     * 分页获取当前用户创建的对话历史列表
-     *
-     * @param chatHistoryQueryRequest 查询请求
-     * @param request                 请求对象
-     * @return 对话历史分页
-     */
-    @PostMapping("/my/list/page/vo")
-    public BaseResponse<Page<ChatHistoryVO>> listMyChatHistoryVOByPage(@RequestBody ChatHistoryQueryRequest chatHistoryQueryRequest,
-                                                                       HttpServletRequest request) {
-        ThrowUtils.throwIf(chatHistoryQueryRequest == null, ErrorCode.PARAMS_ERROR);
-        
-        User loginUser = userService.getLoginUser(request);
-        chatHistoryQueryRequest.setUserId(loginUser.getId());
-        
-        long pageNum = chatHistoryQueryRequest.getPageNum();
-        long pageSize = chatHistoryQueryRequest.getPageSize();
-        
-        Page<ChatHistory> chatHistoryPage = chatHistoryService.page(Page.of(pageNum, pageSize),
-                chatHistoryService.getQueryWrapper(chatHistoryQueryRequest));
-        return ResultUtils.success(chatHistoryService.getChatHistoryVOPage(chatHistoryPage));
-    }
 
     /**
      * 根据应用ID获取最新的对话历史
@@ -160,49 +97,24 @@ public class ChatHistoryController {
      * @return 对话历史列表
      */
     @GetMapping("/latest/{appId}")
-    public BaseResponse<List<ChatHistoryVO>> getLatestChatHistoryByAppId(@PathVariable Long appId,
+    public BaseResponse<List<ChatHistory>> getLatestChatHistoryByAppId(@PathVariable Long appId,
                                                                          HttpServletRequest request) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR);
         
         // 校验应用是否存在
         App app = appService.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        
+
         User loginUser = userService.getLoginUser(request);
         // 仅应用创建者和管理员可查看
         if (!app.getUserId().equals(loginUser.getId()) && !userService.isAdmin(request)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
         
-        List<ChatHistoryVO> chatHistoryList = chatHistoryService.getLatestChatHistoryByAppId(appId, 10);
+        List<ChatHistory> chatHistoryList = chatHistoryService.getLatestChatHistoryByAppId(appId, 10);
         return ResultUtils.success(chatHistoryList);
     }
 
-    /**
-     * 根据应用ID删除所有对话历史（仅应用创建者和管理员）
-     *
-     * @param appId   应用ID
-     * @param request 请求对象
-     * @return 是否删除成功
-     */
-    @DeleteMapping("/app/{appId}")
-    public BaseResponse<Boolean> deleteChatHistoryByAppId(@PathVariable Long appId,
-                                                          HttpServletRequest request) {
-        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR);
-        
-        // 校验应用是否存在
-        App app = appService.getById(appId);
-        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
-        
-        User loginUser = userService.getLoginUser(request);
-        // 仅应用创建者和管理员可删除
-        if (!app.getUserId().equals(loginUser.getId()) && !userService.isAdmin(request)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-        }
-        
-        boolean result = chatHistoryService.removeByAppId(appId);
-        return ResultUtils.success(result);
-    }
 
     /**
      * 分页查询某个应用的对话历史（游标查询）

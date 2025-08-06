@@ -29,7 +29,6 @@ server:
     session:
       cookie:
         max-age: 2592000
-
 # AI
 langchain4j:
   open-ai:
@@ -39,7 +38,6 @@ langchain4j:
       model-name: deepseek-chat
       log-requests: true
       log-responses: true
-
 # springdoc-openapi
 springdoc:
   group-configs:

@@ -26,18 +26,11 @@ public interface UserService extends IService<User> {
     long userRegister(String email,String userName, String userPassword, String checkPassword);
 
     /**
-     * 获取脱敏的已登录用户信息
-     *
-     * @return
-     */
-    UserVO getLoginUserVO(User user);
-
-    /**
      * 用户登录
      *
-     * @param userName  用户名
+     * @param userName     用户名
      * @param userPassword 用户密码
-     * @param request
+     * @param request      request
      * @return 脱敏后的用户信息
      */
     UserVO userLogin(String userName, String userPassword, HttpServletRequest request);
@@ -45,8 +38,8 @@ public interface UserService extends IService<User> {
     /**
      * 获取当前登录用户
      *
-     * @param request
-     * @return
+     * @param request request
+     * @return 用户信息
      */
     User getLoginUser(HttpServletRequest request);
 
@@ -54,15 +47,10 @@ public interface UserService extends IService<User> {
      * 获取脱敏后的用户信息
      *
      * @param user 用户信息
-     * @return
+     * @return 脱敏后的用户信息
      */
     UserVO getUserVO(User user);
 
-    /**
-     * 获取脱敏后的用户信息（分页）
-     *
-     */
-    List<UserVO> getUserVOList(List<User> userList);
 
     /**
      * 用户注销

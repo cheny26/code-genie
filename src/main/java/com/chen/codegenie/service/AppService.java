@@ -8,7 +8,6 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
 import reactor.core.publisher.Flux;
-
 import java.util.List;
 
 /**
@@ -52,13 +51,6 @@ public interface AppService extends IService<App> {
      */
     List<AppVO> getAppVOList(List<App> appList, HttpServletRequest request);
 
-    /**
-     * 获取精选应用查询条件
-     *
-     * @param appQueryRequest 查询请求
-     * @return 查询条件
-     */
-    QueryWrapper getFeaturedQueryWrapper(AppQueryRequest appQueryRequest);
 
     /**
      *
@@ -76,10 +68,4 @@ public interface AppService extends IService<App> {
      */
     String deploy(Long appId,User loginUser);
 
-    /**
-     * 删除应用（级联删除相关数据）
-     * @param appId 应用ID
-     * @return 是否删除成功
-     */
-    boolean removeAppWithCascade(Long appId);
 }

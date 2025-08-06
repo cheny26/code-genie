@@ -6,9 +6,7 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.chen.codegenie.model.dto.chathistory.ChatHistoryQueryRequest;
 import com.chen.codegenie.model.entity.ChatHistory;
-import com.chen.codegenie.model.vo.ChatHistoryVO;
 import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,13 +18,6 @@ import java.util.List;
  */
 public interface ChatHistoryService extends IService<ChatHistory> {
 
-    /**
-     * 校验对话历史
-     *
-     * @param chatHistory 对话历史
-     * @param add         是否为创建校验
-     */
-    void validChatHistory(ChatHistory chatHistory, boolean add);
 
     /**
      * 获取查询条件
@@ -36,21 +27,8 @@ public interface ChatHistoryService extends IService<ChatHistory> {
      */
     QueryWrapper getQueryWrapper(ChatHistoryQueryRequest chatHistoryQueryRequest);
 
-    /**
-     * 获取对话历史封装
-     *
-     * @param chatHistory 对话历史
-     * @return 对话历史封装
-     */
-    ChatHistoryVO getChatHistoryVO(ChatHistory chatHistory);
 
-    /**
-     * 分页获取对话历史封装
-     *
-     * @param chatHistoryPage 对话历史分页
-     * @return 对话历史封装分页
-     */
-    Page<ChatHistoryVO> getChatHistoryVOPage(Page<ChatHistory> chatHistoryPage);
+
 
     /**
      * 根据应用ID获取最新的对话历史
@@ -59,7 +37,7 @@ public interface ChatHistoryService extends IService<ChatHistory> {
      * @param pageSize 页面大小
      * @return 对话历史列表
      */
-    List<ChatHistoryVO> getLatestChatHistoryByAppId(Long appId, int pageSize);
+    List<ChatHistory> getLatestChatHistoryByAppId(Long appId, int pageSize);
 
     /**
      * 分页查询某个应用的对话历史（游标查询）

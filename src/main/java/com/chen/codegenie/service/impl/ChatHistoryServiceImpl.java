@@ -1,6 +1,5 @@
 package com.chen.codegenie.service.impl;
 
-import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.chen.codegenie.constant.UserConstant;
@@ -11,7 +10,6 @@ import com.chen.codegenie.model.dto.chathistory.ChatHistoryQueryRequest;
 import com.chen.codegenie.model.entity.App;
 import com.chen.codegenie.model.entity.User;
 import com.chen.codegenie.model.enums.MessageTypeEnum;
-import com.chen.codegenie.model.vo.ChatHistoryVO;
 import com.chen.codegenie.service.AppService;
 import com.chen.codegenie.service.UserService;
 import com.mybatisflex.core.paginate.Page;
@@ -23,17 +21,12 @@ import com.chen.codegenie.service.ChatHistoryService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+
 
 /**
  * 对话历史 服务层实现。
@@ -44,13 +37,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatHistory> implements ChatHistoryService {
 
-    @Resource
-    private UserService userService;
 
     @Resource
     private AppService appService;
 
-    @Override
     public void validChatHistory(ChatHistory chatHistory, boolean add) {
         if (chatHistory == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -101,101 +91,20 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         if (lastCreateTime != null) {
             queryWrapper.lt("create_time", lastCreateTime);
         }
-        // 排序
-        if (StrUtil.isNotBlank(sortField)) {
-            queryWrapper.orderBy(sortField, "ascend".equals(sortOrder));
-        } else {
-            // 默认按创建时间降序排列
-            queryWrapper.orderBy("create_time", false);
-        }
+        // 默认按创建时间降序排列
+        queryWrapper.orderBy("create_time", false);
         return queryWrapper;
     }
 
-    @Override
-    public ChatHistoryVO getChatHistoryVO(ChatHistory chatHistory) {
-        ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
-        BeanUtil.copyProperties(chatHistory, chatHistoryVO);
-        
-        // 关联查询应用信息
-        Long appId = chatHistory.getAppId();
-        if (appId != null && appId > 0) {
-            App app = appService.getById(appId);
-            if (app != null) {
-                chatHistoryVO.setAppName(app.getAppName());
-            }
-        }
-        
-        // 关联查询用户信息
-        Long userId = chatHistory.getUserId();
-        if (userId != null && userId > 0) {
-            User user = userService.getById(userId);
-            if (user != null) {
-                chatHistoryVO.setUserName(user.getUserName());
-            }
-        }
-        
-        return chatHistoryVO;
-    }
 
     @Override
-    public Page<ChatHistoryVO> getChatHistoryVOPage(Page<ChatHistory> chatHistoryPage) {
-        List<ChatHistory> chatHistoryList = chatHistoryPage.getRecords();
-        Page<ChatHistoryVO> chatHistoryVOPage = new Page<>(chatHistoryPage.getPageNumber(), 
-                chatHistoryPage.getPageSize(), chatHistoryPage.getTotalRow());
-        if (CollUtil.isEmpty(chatHistoryList)) {
-            return chatHistoryVOPage;
-        }
-        
-        // 关联查询用户和应用信息
-        Set<Long> userIdSet = chatHistoryList.stream().map(ChatHistory::getUserId).collect(Collectors.toSet());
-        Set<Long> appIdSet = chatHistoryList.stream().map(ChatHistory::getAppId).collect(Collectors.toSet());
-        
-        Map<Long, List<User>> userIdUserListMap = userService.listByIds(userIdSet).stream()
-                .collect(Collectors.groupingBy(User::getId));
-        Map<Long, List<App>> appIdAppListMap = appService.listByIds(appIdSet).stream()
-                .collect(Collectors.groupingBy(App::getId));
-        
-        // 填充信息
-        List<ChatHistoryVO> chatHistoryVOList = chatHistoryList.stream().map(chatHistory -> {
-            ChatHistoryVO chatHistoryVO = new ChatHistoryVO();
-            BeanUtil.copyProperties(chatHistory, chatHistoryVO);
-            
-            Long userId = chatHistory.getUserId();
-            User user = null;
-            if (userIdUserListMap.containsKey(userId)) {
-                user = userIdUserListMap.get(userId).get(0);
-            }
-            if (user != null) {
-                chatHistoryVO.setUserName(user.getUserName());
-            }
-            
-            Long appId = chatHistory.getAppId();
-            App app = null;
-            if (appIdAppListMap.containsKey(appId)) {
-                app = appIdAppListMap.get(appId).get(0);
-            }
-            if (app != null) {
-                chatHistoryVO.setAppName(app.getAppName());
-            }
-            
-            return chatHistoryVO;
-        }).collect(Collectors.toList());
-        
-        chatHistoryVOPage.setRecords(chatHistoryVOList);
-        return chatHistoryVOPage;
-    }
-
-    @Override
-    public List<ChatHistoryVO> getLatestChatHistoryByAppId(Long appId, int pageSize) {
-        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
-        
+    public List<ChatHistory> getLatestChatHistoryByAppId(Long appId, int pageSize) {
         QueryWrapper queryWrapper = QueryWrapper.create()
                 .where("app_id = {0}", appId)
                 .orderBy("create_time", false);
         
         Page<ChatHistory> chatHistoryPage = this.page(Page.of(1, pageSize), queryWrapper);
-        Page<ChatHistoryVO> chatHistoryVOPage = getChatHistoryVOPage(chatHistoryPage);
-        return chatHistoryVOPage.getRecords();
+        return chatHistoryPage.getRecords();
     }
 
     @Override
@@ -216,10 +125,8 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     @Override
     public boolean removeByAppId(Long appId) {
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
-        
         QueryWrapper queryWrapper = QueryWrapper.create()
                 .where("app_id = {0}", appId);
-        
         return this.remove(queryWrapper);
     }
 
@@ -251,8 +158,6 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
             }
             // 反转列表，确保按时间正序（老的在前，新的在后）
             historyList = historyList.reversed();
-            // 按时间顺序添加到记忆中
-            int loadedCount = 0;
             // 先清理历史缓存，防止重复加载
             chatMemory.clear();
             for (ChatHistory history : historyList) {
@@ -261,10 +166,9 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
                 } else if (MessageTypeEnum.AI.getValue().equals(history.getMessageType())) {
                     chatMemory.add(AiMessage.from(history.getMessage()));
                 }
-                loadedCount++;
             }
-            log.info("成功为 appId: {} 加载了 {} 条历史对话", appId, loadedCount);
-            return loadedCount;
+            log.info("成功为 appId: {} 加载了 {} 条历史对话", appId, historyList.size());
+            return historyList.size();
         }catch (Exception e) {
             log.error("加载历史对话失败，appId: {}, error: {}", appId, e.getMessage(), e);
             // 加载失败不影响系统运行，只是没有历史上下文
@@ -284,11 +188,11 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
                 .createTime(LocalDateTime.now())
                 .updateTime(LocalDateTime.now())
                 .build();
-        
+
         validChatHistory(chatHistory, true);
         boolean result = this.save(chatHistory);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "保存对话历史失败");
-        
+
         return chatHistory.getId();
     }
 }

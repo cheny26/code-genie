@@ -10,22 +10,21 @@ import com.chen.codegenie.exception.BusinessException;
 import com.chen.codegenie.exception.ErrorCode;
 import com.chen.codegenie.exception.ThrowUtils;
 import com.chen.codegenie.model.dto.user.*;
+import com.chen.codegenie.model.enums.UserRoleEnum;
 import com.chen.codegenie.model.vo.UserVO;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.beans.factory.annotation.Autowired;
 import com.chen.codegenie.model.entity.User;
 import com.chen.codegenie.service.UserService;
 import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * 用户 控制层。
@@ -75,14 +74,12 @@ public class UserController {
     @GetMapping("/get/login")
     public BaseResponse<UserVO> getLoginUser(HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
-        return ResultUtils.success(userService.getLoginUserVO(loginUser));
+        return ResultUtils.success(userService.getUserVO(loginUser));
     }
 
     /**
      * 用户注销
      *
-     * @param request 请求对象
-     * @return
      */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
@@ -121,15 +118,6 @@ public class UserController {
         return ResultUtils.success(user);
     }
 
-    /**
-     * 根据 id 获取包装类
-     */
-    @GetMapping("/get/vo")
-    public BaseResponse<UserVO> getUserVOById(long id) {
-        BaseResponse<User> response = getUserById(id);
-        User user = response.getData();
-        return ResultUtils.success(userService.getUserVO(user));
-    }
 
     /**
      * 删除用户
@@ -148,13 +136,17 @@ public class UserController {
      * 更新用户
      */
     @PostMapping("/update")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest) {
+    public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest,HttpServletRequest request) {
         if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         User user = new User();
         BeanUtil.copyProperties(userUpdateRequest, user);
+        User loginUser = userService.getLoginUser(request);
+        //只有本人和管理员可以更新
+        if(!user.getUserRole().equals(UserRoleEnum.ADMIN.getValue()) && !Objects.equals(user.getId(), loginUser.getId())){
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
         boolean result = userService.updateById(user);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
@@ -175,7 +167,7 @@ public class UserController {
                 userService.getQueryWrapper(userQueryRequest));
         // 数据脱敏
         Page<UserVO> userVOPage = new Page<>(pageNum, pageSize, userPage.getTotalRow());
-        List<UserVO> userVOList = userService.getUserVOList(userPage.getRecords());
+        List<UserVO> userVOList = userPage.getRecords().stream().map(u->userService.getUserVO(u)).collect(Collectors.toList());
         userVOPage.setRecords(userVOList);
         return ResultUtils.success(userVOPage);
     }

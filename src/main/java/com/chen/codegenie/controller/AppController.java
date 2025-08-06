@@ -25,10 +25,10 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +81,7 @@ public class AppController {
      * @return 删除结果
      */
     @PostMapping("/delete")
+    @Transactional
     public BaseResponse<Boolean> deleteApp(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -94,10 +95,8 @@ public class AppController {
         if (!oldApp.getUserId().equals(user.getId()) && !userService.isAdmin(request)) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
-        
         // 先删除相关的对话历史
         chatHistoryService.removeByAppId(id);
-        
         // 再删除应用本身
         boolean b = appService.removeById(id);
         return ResultUtils.success(b);
@@ -125,8 +124,7 @@ public class AppController {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
         }
         App app=new App();
-        app.setId(id);
-        app.setAppName(appUpdateRequest.getAppName());
+        BeanUtil.copyProperties(appUpdateRequest,app);
         app.setUpdateTime(LocalDateTime.now());
         boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
@@ -190,7 +188,7 @@ public class AppController {
         // 限制爬虫
         ThrowUtils.throwIf(pageSize > 20, ErrorCode.PARAMS_ERROR);
         Page<App> appPage = appService.page(Page.of(pageNum, pageSize),
-                appService.getFeaturedQueryWrapper(appQueryRequest));
+                appService.getQueryWrapper(appQueryRequest));
         Page<AppVO> appVOPage = new Page<>(pageNum, pageSize, appPage.getTotalRow());
         List<AppVO> appVOList = appService.getAppVOList(appPage.getRecords(), request);
         appVOPage.setRecords(appVOList);
@@ -214,29 +212,6 @@ public class AppController {
         return ResultUtils.success(app);
     }
 
-    /**
-     * 删除应用（仅管理员）
-     *
-     * @param deleteRequest 删除请求
-     * @return 删除结果
-     */
-    @PostMapping("/delete/admin")
-    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> deleteAppByAdmin(@RequestBody DeleteRequest deleteRequest) {
-        if (deleteRequest == null || deleteRequest.getId() <= 0) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        long id=deleteRequest.getId();
-        App app = appService.getById(id);
-        ThrowUtils.throwIf(app==null,ErrorCode.NOT_FOUND_ERROR);
-        
-        // 先删除相关的对话历史
-        chatHistoryService.removeByAppId(id);
-        
-        // 再删除应用本身
-        boolean b = appService.removeById(deleteRequest.getId());
-        return ResultUtils.success(b);
-    }
 
     /**
      * 管理员更新应用
@@ -344,5 +319,7 @@ public class AppController {
         String deployUrl = appService.deploy(appId, loginUser);
         return ResultUtils.success(deployUrl);
     }
+
+
 
 }

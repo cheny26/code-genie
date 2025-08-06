@@ -23,9 +23,6 @@ import java.io.File;
 @Slf4j
 public class AiCodeGeneratorFacade {
 
-    //@Resource
-    //private AiCodeGeneratorService aiCodeGeneratorService;
-
     @Resource
     private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
 

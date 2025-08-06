@@ -15,6 +15,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 
 import java.time.Duration;
 
@@ -30,12 +31,18 @@ public class AiCodeGeneratorServiceFactory {
 
     @Resource
     private StreamingChatModel streamingChatModel;
+
     @Resource
+    @Lazy
     private ChatHistoryService chatHistoryService;
 
     private final RedisChatMemoryStore redisChatMemoryStore;
 
-    private Cache<Long,AiCodeGeneratorService> serviceCache= Caffeine.newBuilder()
+    public AiCodeGeneratorServiceFactory(RedisChatMemoryStore redisChatMemoryStore) {
+        this.redisChatMemoryStore = redisChatMemoryStore;
+    }
+
+    private final Cache<Long,AiCodeGeneratorService> serviceCache= Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
@@ -44,25 +51,22 @@ public class AiCodeGeneratorServiceFactory {
             })
             .build();
 
-    public AiCodeGeneratorServiceFactory(RedisChatMemoryStore redisChatMemoryStore) {
-        this.redisChatMemoryStore = redisChatMemoryStore;
-    }
-
     /**
      * 默认提供一个 Bean
      */
-    @Bean
-    public AiCodeGeneratorService aiCodeGeneratorService() {
-        return getAiCodeGeneratorService(0L);
-    }
+    //@Bean
+    //public AiCodeGeneratorService aiCodeGeneratorService() {
+    //    return getAiCodeGeneratorService(0L);
+    //}
 
-    public AiCodeGeneratorService aiCodeGeneratorService(long appId) {
-        return serviceCache.get(appId,this::getAiCodeGeneratorService);
+    public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
+        return serviceCache.get(appId,this::createAiCodeGeneratorService);
     }
 
 
     //@Bean
-    public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
+    public AiCodeGeneratorService createAiCodeGeneratorService(long appId) {
+
         log.info("为 appId: {} 创建新的 AI 服务实例", appId);
         ChatMemory chatMemory=MessageWindowChatMemory.builder()
                 .id(appId)

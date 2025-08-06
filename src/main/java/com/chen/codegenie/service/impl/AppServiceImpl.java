@@ -23,14 +23,10 @@ import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.chen.codegenie.mapper.AppMapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +45,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private UserService userService;
+
     @Resource
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+
     //todo 优化架构，存在循环依赖问题
     @Resource
     @Lazy
@@ -63,7 +61,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         String appName = app.getAppName();
         String initPrompt = app.getInitPrompt();
-        
         // 创建时，参数不能为空
         if (add) {
             ThrowUtils.throwIf(StrUtil.isBlank(initPrompt), ErrorCode.PARAMS_ERROR, "初始化提示词不能为空");
@@ -79,9 +76,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Override
     public QueryWrapper getQueryWrapper(AppQueryRequest appQueryRequest) {
-        QueryWrapper queryWrapper = QueryWrapper.create();
         if (appQueryRequest == null) {
-            return queryWrapper;
+            return new QueryWrapper();
         }
         Long id = appQueryRequest.getId();
         String appName = appQueryRequest.getAppName();
@@ -92,25 +88,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         Long userId = appQueryRequest.getUserId();
         String sortField = appQueryRequest.getSortField();
         String sortOrder = appQueryRequest.getSortOrder();
-
-        queryWrapper.eq("id", id, id != null);
-        queryWrapper.like("app_name", appName, StrUtil.isNotBlank(appName));
-        queryWrapper.like("init_prompt", initPrompt, StrUtil.isNotBlank(initPrompt));
-        queryWrapper.eq("code_gen_type", codeGenType, StrUtil.isNotBlank(codeGenType));
-        queryWrapper.eq("deploy_key", deployKey, StrUtil.isNotBlank(deployKey));
-        queryWrapper.eq("priority", priority, priority != null);
-        queryWrapper.eq("user_id", userId, userId != null);
-        
+        QueryWrapper queryWrapper = QueryWrapper.create()
+                .eq("id",id)
+                .eq("code_gen_type", codeGenType)
+                .eq("deploy_key", deployKey)
+                .eq("priority", priority)
+                .eq("user_id", userId)
+                .like("app_name", appName)
+                .like("init_prompt", initPrompt);
         // 排序
         if (StrUtil.isNotBlank(sortField)) {
             boolean isAsc = "ascend".equals(sortOrder);
             switch (sortField) {
-                case "id":
-                    queryWrapper.orderBy("id", isAsc);
-                    break;
-                case "appName":
-                    queryWrapper.orderBy("app_name", isAsc);
-                    break;
                 case "priority":
                     queryWrapper.orderBy("priority", isAsc);
                     break;
@@ -127,7 +116,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         } else {
             queryWrapper.orderBy("create_time", false);
         }
-        
         return queryWrapper;
     }
 
@@ -135,7 +123,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     public AppVO getAppVO(App app, HttpServletRequest request) {
         AppVO appVO = new AppVO();
         BeanUtil.copyProperties(app, appVO);
-        
         // 关联查询用户信息
         Long userId = app.getUserId();
         User user = null;
@@ -143,7 +130,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             user = userService.getById(userId);
         }
         appVO.setUser(userService.getUserVO(user));
-        
         return appVO;
     }
 
@@ -174,16 +160,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }).collect(Collectors.toList());
     }
 
-    @Override
-    public QueryWrapper getFeaturedQueryWrapper(AppQueryRequest appQueryRequest) {
-        QueryWrapper queryWrapper = getQueryWrapper(appQueryRequest);
-        // 精选应用：优先级大于 0
-        queryWrapper.gt("priority", 0);
-        // 按优先级降序排列
-        queryWrapper.orderBy("priority", false);
-        queryWrapper.orderBy("create_time", false);
-        return queryWrapper;
-    }
 
     @Override
     public Flux<String> chatToGen(Long appId,String userPrompt, User loginUser) {
@@ -245,14 +221,4 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
-    @Override
-    public boolean removeAppWithCascade(Long appId) {
-        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
-        
-        // 先删除相关的对话历史
-        // 注意：这里需要注入 ChatHistoryService，但为了避免循环依赖，我们在 Controller 层处理级联删除
-        
-        // 删除应用本身
-        return this.removeById(appId);
-    }
 }
